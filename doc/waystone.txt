@@ -1,16 +1,17 @@
+==============================================================================
+------------------------------------------------------------------------------
                                                                       *waystone*
-waystone.nvim
-
 Version: 0.1.1
 
-A minimal Neovim plugin template with typed configuration and a simple API.
+waystone.nvim
+
+Navigate your Neovim project like a fantasy hero — drop waystones to mark
+locations and jump between them instantly.
 
 ------------------------------------------------------------------------------
 Plugin configuration.
 Class ~
 {waystone.Config}
-Fields ~
-{greeting} `(string)` The message returned by `greet()`. Default: `"Hello from waystone!"`
 
 ------------------------------------------------------------------------------
                                                                      *M.setup()*
@@ -21,14 +22,6 @@ Call this once in your Neovim config to override defaults.
 
 Parameters ~
 {opts} `(optional)` `(waystone.Config)` User configuration options
-
-------------------------------------------------------------------------------
-                                                                     *M.greet()*
-                                  `M.greet`()
-Return the configured greeting string.
-
-Return ~
-`(string)` greeting
 
 
  vim:tw=78:ts=8:noet:ft=help:norl:
