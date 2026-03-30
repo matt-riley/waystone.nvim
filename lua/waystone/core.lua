@@ -160,6 +160,55 @@ local function get_scope_store(scope)
   return key, state.data.scopes[key]
 end
 
+-- Private: resolve scope key + store, returning an error when no git root is found.
+local function resolve_scope_store(scope)
+  local key, store = get_scope_store(scope)
+  if not key then
+    return nil, nil, "no git root detected for current buffer"
+  end
+  return key, store
+end
+
+-- Private: convert a slot number to the string key used in the data store.
+local function slot_key(slot)
+  return tostring(slot)
+end
+
+-- Private: record a slot as the active navigation target for its scope.
+local function set_active_slot(key, slot)
+  state.active_slot_by_scope[key] = slot
+end
+
+-- Private: clear the active-slot bookmark when the given slot is currently active.
+local function clear_active_slot(key, slot)
+  if state.active_slot_by_scope[key] == slot then
+    state.active_slot_by_scope[key] = nil
+  end
+end
+
+-- Private: compute the next cycle index given the active slot and step direction.
+-- When no slot is active, forward cycling starts from index 1 and backward from the last.
+local function next_cycle_index(marks, current_slot, step)
+  if not current_slot then
+    return step < 0 and #marks or 1
+  end
+
+  local idx = 1
+  for i, entry in ipairs(marks) do
+    if entry.slot == current_slot then
+      idx = i
+      break
+    end
+  end
+
+  if step > 0 then
+    return (idx % #marks) + 1
+  elseif step < 0 then
+    return ((idx - 2 + #marks) % #marks) + 1
+  end
+  return idx
+end
+
 local function capture_current_mark()
   local path = vim.api.nvim_buf_get_name(0)
   if path == "" then
@@ -190,7 +239,7 @@ function M.list_marks(scope)
 
   local marks = {}
   for slot = 1, state.config.slots do
-    local mark = scope_store[tostring(slot)]
+    local mark = scope_store[slot_key(slot)]
     if mark then
       marks[#marks + 1] = {
         slot = slot,
@@ -208,12 +257,12 @@ function M.get_slot(slot, scope)
     return nil, err
   end
 
-  local _, scope_store = get_scope_store(scope)
+  local _, scope_store, scope_err = resolve_scope_store(scope)
   if not scope_store then
-    return nil, "no git root detected for current buffer"
+    return nil, scope_err
   end
 
-  local mark = scope_store[tostring(slot)]
+  local mark = scope_store[slot_key(slot)]
   if not mark then
     return nil
   end
@@ -227,9 +276,9 @@ function M.set_slot(slot, mark, scope)
     return nil, err
   end
 
-  local _, scope_store = get_scope_store(scope)
+  local key, scope_store, scope_err = resolve_scope_store(scope)
   if not scope_store then
-    return nil, "no git root detected for current buffer"
+    return nil, scope_err
   end
 
   local value = mark
@@ -246,11 +295,11 @@ function M.set_slot(slot, mark, scope)
     return nil, err
   end
 
-  scope_store[tostring(slot)] = value
-  state.active_slot_by_scope[get_scope_key(scope)] = slot
+  scope_store[slot_key(slot)] = value
+  set_active_slot(key, slot)
   save_data()
 
-  return vim.deepcopy(scope_store[tostring(slot)])
+  return vim.deepcopy(scope_store[slot_key(slot)])
 end
 
 function M.clear_slot(slot, scope)
@@ -259,16 +308,13 @@ function M.clear_slot(slot, scope)
     return nil, err
   end
 
-  local key, scope_store = get_scope_store(scope)
+  local key, scope_store, scope_err = resolve_scope_store(scope)
   if not scope_store then
-    return nil, "no git root detected for current buffer"
+    return nil, scope_err
   end
 
-  scope_store[tostring(slot)] = nil
-  if state.active_slot_by_scope[key] == slot then
-    state.active_slot_by_scope[key] = nil
-  end
-
+  scope_store[slot_key(slot)] = nil
+  clear_active_slot(key, slot)
   save_data()
   return true
 end
@@ -316,7 +362,7 @@ function M.select_slot(slot, scope)
 
   local key = get_scope_key(scope)
   if key then
-    state.active_slot_by_scope[key] = slot
+    set_active_slot(key, slot)
   end
 
   return vim.deepcopy(mark)
@@ -334,26 +380,7 @@ function M.cycle(step, scope)
     return nil, "no marks set for this scope"
   end
 
-  local current_slot = state.active_slot_by_scope[key]
-  local idx
-
-  if current_slot then
-    idx = 1
-    for i, entry in ipairs(marks) do
-      if entry.slot == current_slot then
-        idx = i
-        break
-      end
-    end
-    if step > 0 then
-      idx = (idx % #marks) + 1
-    elseif step < 0 then
-      idx = ((idx - 2 + #marks) % #marks) + 1
-    end
-  else
-    idx = step < 0 and #marks or 1
-  end
-
+  local idx = next_cycle_index(marks, state.active_slot_by_scope[key], step)
   local next_entry = marks[idx]
   local selected, err = M.select_slot(next_entry.slot, key)
   if not selected then
@@ -364,6 +391,41 @@ function M.cycle(step, scope)
     slot = next_entry.slot,
     mark = selected,
   }
+end
+
+function M.toggle_file(scope)
+  local path = vim.api.nvim_buf_get_name(0)
+  if path == "" then
+    return nil, "current buffer has no file path"
+  end
+
+  local marks = M.list_marks(scope)
+  for _, entry in ipairs(marks) do
+    if entry.mark.path == path then
+      local ok, err = M.clear_slot(entry.slot, scope)
+      if not ok then
+        return nil, err
+      end
+      return true, "cleared"
+    end
+  end
+
+  local used = {}
+  for _, entry in ipairs(marks) do
+    used[entry.slot] = true
+  end
+
+  for s = 1, state.config.slots do
+    if not used[s] then
+      local mark, err = M.set_slot(s, nil, scope)
+      if not mark then
+        return nil, err
+      end
+      return mark, "set"
+    end
+  end
+
+  return nil, string.format("all %d slots are already populated", state.config.slots)
 end
 
 function M.reset_for_tests()

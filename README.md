@@ -4,9 +4,7 @@
 > locations and jump between them instantly.
 
 <!-- Uncomment badges after pushing to GitHub:
-[![Tests](https://github.com/mattriley/waystone.nvim/actions/workflows/tests.yml/badge.svg)](https://github.com/mattriley/waystone.nvim/actions/workflows/tests.yml)
-[![Lint](https://github.com/mattriley/waystone.nvim/actions/workflows/lint.yml/badge.svg)](https://github.com/mattriley/waystone.nvim/actions/workflows/lint.yml)
-[![Format](https://github.com/mattriley/waystone.nvim/actions/workflows/format.yml/badge.svg)](https://github.com/mattriley/waystone.nvim/actions/workflows/format.yml)
+[![CI](https://github.com/mattriley/waystone.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/mattriley/waystone.nvim/actions/workflows/ci.yml)
 -->
 
 ## Features

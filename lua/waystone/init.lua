@@ -185,7 +185,7 @@ end
 --- Show the active scope and mark count.
 ---@param scope? string Optional explicit scope. Defaults to the current buffer's git root.
 function waystone.show_scope(scope)
-  ui.show_scope(scope)
+  ui.show_scope(scope, waystone.config.slots)
 end
 
 --- Toggle a file-level mark for the current buffer.
@@ -198,39 +198,7 @@ end
 ---@return waystone.Mark|boolean|nil result Saved mark when set, `true` when cleared.
 ---@return string? err Status string (`"set"` / `"cleared"`) or an error message.
 function waystone.toggle_file(scope)
-  local path = vim.api.nvim_buf_get_name(0)
-  if path == "" then
-    return nil, "current buffer has no file path"
-  end
-
-  local marks = core.list_marks(scope)
-  for _, entry in ipairs(marks) do
-    if entry.mark.path == path then
-      local ok, err = core.clear_slot(entry.slot, scope)
-      if not ok then
-        return nil, err
-      end
-      return true, "cleared"
-    end
-  end
-
-  local used = {}
-  for _, entry in ipairs(marks) do
-    used[entry.slot] = true
-  end
-
-  local max_slots = waystone.config and waystone.config.slots or 4
-  for s = 1, max_slots do
-    if not used[s] then
-      local mark, err = core.set_slot(s, nil, scope)
-      if not mark then
-        return nil, err
-      end
-      return mark, "set"
-    end
-  end
-
-  return nil, string.format("all %d slots are already populated", max_slots)
+  return core.toggle_file(scope)
 end
 
 return waystone
