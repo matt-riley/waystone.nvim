@@ -3,6 +3,7 @@ local T = MiniTest.new_set()
 
 local waystone = require("waystone")
 local core = require("waystone.core")
+local MISSING = {}
 
 local function with_notify_spy(fn)
   local original_notify = vim.notify
@@ -20,25 +21,33 @@ local function with_notify_spy(fn)
   vim.notify = original_notify
 
   if not ok then
-    error(err)
+    error(err, 0)
   end
 end
 
 local function with_overrides(target, replacements, fn)
   local originals = {}
   for key, value in pairs(replacements) do
-    originals[key] = target[key]
+    if target[key] == nil then
+      originals[key] = MISSING
+    else
+      originals[key] = target[key]
+    end
     target[key] = value
   end
 
   local ok, err = pcall(fn)
 
   for key, value in pairs(originals) do
-    target[key] = value
+    if value == MISSING then
+      target[key] = nil
+    else
+      target[key] = value
+    end
   end
 
   if not ok then
-    error(err)
+    error(err, 0)
   end
 end
 
@@ -54,7 +63,7 @@ local function with_temp_data_file(fn)
   vim.fn.delete(data_file)
 
   if not ok then
-    error(err)
+    error(err, 0)
   end
 end
 
@@ -70,7 +79,7 @@ local function with_temp_files(files, fn)
   end
 
   if not ok then
-    error(err)
+    error(err, 0)
   end
 end
 
