@@ -185,7 +185,7 @@ end
 --- Show the active scope and mark count.
 ---@param scope? string Optional explicit scope. Defaults to the current buffer's git root.
 function waystone.show_scope(scope)
-  ui.show_scope(scope)
+  ui.show_scope(scope, waystone.config.slots)
 end
 
 --- Toggle a file-level mark for the current buffer.

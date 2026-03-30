@@ -128,7 +128,8 @@ end
 
 --- Echo lightweight scope and mark-count info for the active scope.
 ---@param scope? string
-function M.show_scope(scope)
+---@param slots? integer
+function M.show_scope(scope, slots)
   local detected = scope or core.detect_scope(0)
   if not detected then
     vim.notify("waystone: no git-root scope detected", vim.log.levels.WARN)
@@ -138,13 +139,8 @@ function M.show_scope(scope)
   local marks = core.list_marks(detected)
   local rel = vim.fn.fnamemodify(detected, ":~:.")
   local count = #marks
-  local msg = string.format("scope: %s  |  marks: %d / %s", rel, count, "?")
-
-  -- Prefer the max slot count from config if setup has been called
-  local ok, ws = pcall(require, "waystone")
-  if ok and ws.config and ws.config.slots then
-    msg = string.format("scope: %s  |  marks: %d / %d", rel, count, ws.config.slots)
-  end
+  local max_slots = slots or "?"
+  local msg = string.format("scope: %s  |  marks: %d / %s", rel, count, max_slots)
 
   vim.notify(msg, vim.log.levels.INFO, { title = "Waystone" })
 end

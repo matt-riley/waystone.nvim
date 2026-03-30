@@ -4,6 +4,44 @@ local T = MiniTest.new_set()
 local waystone = require("waystone")
 local core = require("waystone.core")
 
+local function with_notify_spy(fn)
+  local original_notify = vim.notify
+  local notifications = {}
+
+  vim.notify = function(msg, level, opts)
+    notifications[#notifications + 1] = {
+      msg = msg,
+      level = level,
+      opts = opts,
+    }
+  end
+
+  local ok, err = pcall(fn, notifications)
+  vim.notify = original_notify
+
+  if not ok then
+    error(err)
+  end
+end
+
+local function with_overrides(target, replacements, fn)
+  local originals = {}
+  for key, value in pairs(replacements) do
+    originals[key] = target[key]
+    target[key] = value
+  end
+
+  local ok, err = pcall(fn)
+
+  for key, value in pairs(originals) do
+    target[key] = value
+  end
+
+  if not ok then
+    error(err)
+  end
+end
+
 local function with_temp_data_file(fn)
   local data_file = vim.fs.joinpath(vim.fn.getcwd(), "tests", ".tmp-waystone-data.json")
   vim.fn.delete(data_file)
@@ -275,5 +313,143 @@ core_set["marks reload from the persisted data file"] = function()
 end
 
 T["core"] = core_set
+
+local command_set = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      waystone.setup()
+      core.reset_for_tests()
+      if vim.fn.exists(":WaystoneSet") == 0 then
+        dofile(vim.fs.joinpath(vim.fn.getcwd(), "plugin", "waystone.lua"))
+      end
+    end,
+  },
+})
+
+command_set["slot commands parse failures notify at ERROR"] = function()
+  local expected = {
+    WaystoneSet = "WaystoneSet: expected a slot number",
+    WaystoneSelect = "WaystoneSelect: expected a slot number",
+    WaystoneToggleSlot = "WaystoneToggleSlot: expected a slot number",
+  }
+
+  with_overrides(waystone, {
+    set = function()
+      error("WaystoneSet should not execute on parse failure")
+    end,
+    select = function()
+      error("WaystoneSelect should not execute on parse failure")
+    end,
+    toggle = function()
+      error("WaystoneToggleSlot should not execute on parse failure")
+    end,
+  }, function()
+    for command_name, expected_message in pairs(expected) do
+      with_notify_spy(function(notifications)
+        vim.cmd(command_name .. " not-a-number")
+        MiniTest.expect.equality(#notifications, 1)
+        MiniTest.expect.equality(notifications[1].msg, expected_message)
+        MiniTest.expect.equality(notifications[1].level, vim.log.levels.ERROR)
+      end)
+    end
+  end)
+end
+
+command_set["slot command failures preserve notify-level asymmetry"] = function()
+  local assertions = {
+    {
+      command = "WaystoneSet",
+      expected_level = vim.log.levels.ERROR,
+      expected_message = "waystone: set failed",
+      replacement = function()
+        return nil, "set failed"
+      end,
+      field = "set",
+    },
+    {
+      command = "WaystoneSelect",
+      expected_level = vim.log.levels.WARN,
+      expected_message = "waystone: select failed",
+      replacement = function()
+        return nil, "select failed"
+      end,
+      field = "select",
+    },
+    {
+      command = "WaystoneToggleSlot",
+      expected_level = vim.log.levels.WARN,
+      expected_message = "waystone: toggle failed",
+      replacement = function()
+        return nil, "toggle failed"
+      end,
+      field = "toggle",
+    },
+  }
+
+  for _, spec in ipairs(assertions) do
+    with_overrides(waystone, {
+      [spec.field] = spec.replacement,
+    }, function()
+      with_notify_spy(function(notifications)
+        vim.cmd(spec.command .. " 2")
+        MiniTest.expect.equality(#notifications, 1)
+        MiniTest.expect.equality(notifications[1].msg, spec.expected_message)
+        MiniTest.expect.equality(notifications[1].level, spec.expected_level)
+      end)
+    end)
+  end
+end
+
+T["commands"] = command_set
+
+local scope_set = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      waystone.setup()
+      core.reset_for_tests()
+    end,
+  },
+})
+
+scope_set["show_scope() warns when no git scope is detected"] = function()
+  with_overrides(core, {
+    detect_scope = function()
+      return nil
+    end,
+  }, function()
+    with_notify_spy(function(notifications)
+      waystone.show_scope()
+      MiniTest.expect.equality(#notifications, 1)
+      MiniTest.expect.equality(notifications[1].msg, "waystone: no git-root scope detected")
+      MiniTest.expect.equality(notifications[1].level, vim.log.levels.WARN)
+    end)
+  end)
+end
+
+scope_set["show_scope() reports mark count and configured slot capacity"] = function()
+  with_temp_data_file(function(data_file)
+    waystone.setup({ data_file = data_file, slots = 6 })
+    core.reset_for_tests()
+
+    local scope = vim.fn.getcwd()
+    local fixture = vim.fs.joinpath(scope, "tests", ".tmp-scope-display.lua")
+
+    with_temp_files({
+      [fixture] = { "return 'scope'" },
+    }, function()
+      waystone.set(2, { path = fixture, row = 1, col = 0 }, scope)
+
+      with_notify_spy(function(notifications)
+        waystone.show_scope(scope)
+        MiniTest.expect.equality(#notifications, 1)
+        MiniTest.expect.equality(notifications[1].level, vim.log.levels.INFO)
+        MiniTest.expect.equality(notifications[1].opts.title, "Waystone")
+        MiniTest.expect.equality(notifications[1].msg:match("marks:%s+1 / 6"), "marks: 1 / 6")
+      end)
+    end)
+  end)
+end
+
+T["scope"] = scope_set
 
 return T
