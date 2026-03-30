@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Neovim
+        env:
+          NEOVIM_VERSION: v0.11.4
+        run: |
+          curl -fsSL \
+            "https://github.com/neovim/neovim/releases/download/${NEOVIM_VERSION}/nvim-linux-x86_64.tar.gz" \
+            -o "$RUNNER_TEMP/nvim.tar.gz"
+          sudo rm -rf /opt/nvim-linux-x86_64
+          sudo tar -C /opt -xzf "$RUNNER_TEMP/nvim.tar.gz"
+          echo "/opt/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Fetch mini.nvim
+        run: git clone --branch "v0.17.0" --depth 1 https://github.com/echasnovski/mini.nvim "${GITHUB_WORKSPACE}/.ci/mini.nvim"
+
+      - name: Run tests
+        env:
+          MINI_PATH: ${{ github.workspace }}/.ci/mini.nvim
+        run: make test
+
+  lint:
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-lint.yml@96b9df0ccd18bd252729ba4b48836e6ec0aaecb3 # main
+
+  format:
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-format.yml@96b9df0ccd18bd252729ba4b48836e6ec0aaecb3 # main
