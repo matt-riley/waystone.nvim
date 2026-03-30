@@ -1,27 +1,234 @@
-==============================================================================
-------------------------------------------------------------------------------
                                                                       *waystone*
-Version: 0.1.1
-
 waystone.nvim
 
-Navigate your Neovim project like a fantasy hero — drop waystones to mark
-locations and jump between them instantly.
+Version: 0.1.1
+
+Slot-based project marks for Neovim.
+
+Marks are persisted in JSON and grouped by git-root scope. The current v1
+implementation is intentionally small: save marks into numbered slots, jump
+back to them later, cycle between populated slots, and inspect them through
+a lightweight floating list.
+
+Commands ~
+- `:WaystoneList` opens the floating marks list.
+- `:WaystoneToggle` toggles the marks list window.
+- `:WaystoneScope` shows the active scope and mark count.
+- `:WaystoneSet {slot}` saves the current cursor location into a slot.
+- `:WaystoneSelect {slot}` jumps to a slot.
+- `:WaystoneToggleSlot {slot}` toggles a slot on the current cursor
+  location.
+- `:WaystoneNext` / `:WaystonePrev` cycle between populated slots.
 
 ------------------------------------------------------------------------------
 Plugin configuration.
 Class ~
 {waystone.Config}
+Fields ~
+{slots} `(optional)` `(integer)` Number of slot-oriented marks stored per scope. Default: 4.
+{data_file} `(optional)` `(string)` Optional override for the JSON persistence file.
 
 ------------------------------------------------------------------------------
-                                                                     *M.setup()*
-                               `M.setup`({opts})
+Persisted cursor location.
+Class ~
+{waystone.Mark}
+Fields ~
+{path} `(string)` Absolute file path for the mark.
+{row} `(integer)` 1-based cursor row.
+{col} `(integer)` 0-based cursor column.
+
+------------------------------------------------------------------------------
+Slot-oriented mark entry returned by listing/cycling helpers.
+Class ~
+{waystone.SlotEntry}
+Fields ~
+{slot} `(integer)` Slot number.
+{mark} `(waystone.Mark)` Mark saved in this slot.
+
+------------------------------------------------------------------------------
+                                                               *waystone.config*
+                               `waystone.config`
+Active plugin configuration.
+
+Default values:
+- `slots = 4`
+- `data_file = nil`
+Type ~
+`(waystone.Config)`
+
+------------------------------------------------------------------------------
+                                                              *waystone.setup()*
+                            `waystone.setup`({opts})
 Configure the plugin with user options.
 
 Call this once in your Neovim config to override defaults.
 
+Usage ~
+>lua
+  require("waystone").setup()
+  -- OR
+  require("waystone").setup({
+    slots = 6,
+  })
+<
+
 Parameters ~
 {opts} `(optional)` `(waystone.Config)` User configuration options
+
+------------------------------------------------------------------------------
+                                                       *waystone.detect_scope()*
+                           `waystone.detect_scope`()
+Detect the git-root scope used by API calls when `scope` is omitted.
+Return ~
+`(string|nil)` scope Absolute path of the detected git root.
+
+------------------------------------------------------------------------------
+                                                               *waystone.list()*
+                            `waystone.list`({scope})
+List populated marks for a scope ordered by slot number.
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.SlotEntry[])`
+
+------------------------------------------------------------------------------
+                                                                *waystone.set()*
+                    `waystone.set`({slot}, {mark}, {scope})
+Save a mark into a slot.
+
+If `mark` is omitted, the current buffer path and cursor position are used.
+Saving a mark also makes that slot the active navigation target for future
+calls to |waystone.cycle_next()| and |waystone.cycle_prev()|.
+
+Parameters ~
+{slot} `(integer)` Slot number to update.
+{mark} `(optional)` `(waystone.Mark)` Explicit mark value. Omit to capture the current cursor location.
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.Mark|nil)` mark Saved mark.
+Return ~
+`(string)` `(optional)` err Error message on failure.
+
+------------------------------------------------------------------------------
+                                                              *waystone.clear()*
+                       `waystone.clear`({slot}, {scope})
+Clear a slot in a scope.
+
+Clearing the currently active slot resets cycle state for that scope.
+
+Parameters ~
+{slot} `(integer)` Slot number to clear.
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(boolean|nil)` ok `true` when the slot was cleared.
+Return ~
+`(string)` `(optional)` err Error message on failure.
+
+------------------------------------------------------------------------------
+                                                             *waystone.toggle()*
+                       `waystone.toggle`({slot}, {scope})
+Toggle a slot using the current cursor location.
+
+If the slot already points at the current file/row/column, it is cleared.
+Otherwise the current cursor location is stored in that slot.
+
+Parameters ~
+{slot} `(integer)` Slot number to toggle.
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.Mark|boolean|nil)` result Saved mark when set, `true` when cleared.
+Return ~
+`(string)` `(optional)` status Status string (`"set"` / `"cleared"`) or an error message.
+
+------------------------------------------------------------------------------
+                                                             *waystone.select()*
+                       `waystone.select`({slot}, {scope})
+Jump to a slot mark.
+
+This opens the marked file with `:edit`, moves the cursor, and remembers the
+selected slot as the current position for cycling.
+
+Parameters ~
+{slot} `(integer)` Slot number to jump to.
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.Mark|nil)` mark Selected mark.
+Return ~
+`(string)` `(optional)` err Error message on failure.
+
+------------------------------------------------------------------------------
+                                                         *waystone.cycle_next()*
+                         `waystone.cycle_next`({scope})
+Cycle forward across populated slots.
+
+Only populated slots are visited. If no slot is currently active for the
+scope, cycling forward starts from the first populated slot.
+
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.SlotEntry|nil)` entry Selected slot entry.
+Return ~
+`(string)` `(optional)` err Error message on failure.
+
+------------------------------------------------------------------------------
+                                                         *waystone.cycle_prev()*
+                         `waystone.cycle_prev`({scope})
+Cycle backward across populated slots.
+
+Only populated slots are visited. If no slot is currently active for the
+scope, cycling backward starts from the last populated slot.
+
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.SlotEntry|nil)` entry Selected slot entry.
+Return ~
+`(string)` `(optional)` err Error message on failure.
+
+------------------------------------------------------------------------------
+                                                          *waystone.data_path()*
+                             `waystone.data_path`()
+Return the resolved persistence file path.
+Return ~
+`(string)` path JSON file used for storing marks.
+
+------------------------------------------------------------------------------
+                                                          *waystone.open_list()*
+                         `waystone.open_list`({scope})
+Open the floating marks list for a scope.
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+
+------------------------------------------------------------------------------
+                                                        *waystone.toggle_list()*
+                        `waystone.toggle_list`({scope})
+Toggle the floating marks list for a scope.
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+
+------------------------------------------------------------------------------
+                                                         *waystone.show_scope()*
+                         `waystone.show_scope`({scope})
+Show the active scope and mark count.
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+
+------------------------------------------------------------------------------
+                                                        *waystone.toggle_file()*
+                        `waystone.toggle_file`({scope})
+Toggle a file-level mark for the current buffer.
+
+If the current file is already marked in any slot for the scope, that slot
+is cleared. Otherwise the current cursor location is stored in the lowest
+available slot.
+
+Parameters ~
+{scope} `(optional)` `(string)` Optional explicit scope. Defaults to the current buffer's git root.
+Return ~
+`(waystone.Mark|boolean|nil)` result Saved mark when set, `true` when cleared.
+Return ~
+`(string)` `(optional)` err Status string (`"set"` / `"cleared"`) or an error message.
 
 
  vim:tw=78:ts=8:noet:ft=help:norl:
