@@ -10,8 +10,9 @@
 ## Features
 
 - Store persistent slot-based marks at buffer positions
-- Scope marks by the current git root (or an explicit scope override)
+- Scope marks by git root by default, or by `cwd`, `global`, `git_branch`, or an explicit scope override
 - Jump directly to a slot or cycle through populated slots
+- Export the current scope to quickfix or clear it in one step
 - Inspect marks through a lightweight floating list and scope summary
 - Keep the current v1 surface usable from both commands and a small Lua API
 
@@ -44,6 +45,7 @@ local waystone = require("waystone")
 
 waystone.setup({
   slots = 4,
+  scope_mode = "git",
 })
 
 vim.keymap.set("n", "<leader>m1", function()
@@ -59,14 +61,17 @@ vim.keymap.set("n", "[m", waystone.cycle_prev)
 vim.keymap.set("n", "<leader>ml", waystone.open_list)
 ```
 
-All API calls use the current buffer's git root as the default scope. You can
-pass an explicit `scope` string if you want to store marks somewhere else.
+All API calls use the configured `scope_mode` when `scope` is omitted. The
+default remains the current buffer's git root, and you can still pass an
+explicit `scope` string any time you want to override that resolution.
 
 ### Commands
 
 - `:WaystoneList` opens the floating marks list.
 - `:WaystoneToggle` toggles that list window.
 - `:WaystoneScope` shows the active scope path and mark count.
+- `:WaystoneQuickfix` exports the current scope to quickfix and opens it.
+- `:WaystoneClearAll` clears all populated slots in the current scope.
 - `:WaystoneSet {slot}` saves the current cursor location into a slot.
 - `:WaystoneSelect {slot}` jumps to a saved slot.
 - `:WaystoneToggleSlot {slot}` toggles a slot at the current cursor location.
@@ -82,23 +87,42 @@ require("waystone").setup({})
 
 - `slots` (default: `4`): number of slot-oriented marks stored per scope.
 - `data_file`: optional path override for the JSON file used to persist marks.
+- `scope_mode` (default: `"git"`): built-in default scope resolver. Supported
+  values are `"git"`, `"cwd"`, `"global"`, and `"git_branch"`.
 
 ## API
 
-- `detect_scope()` -> detect the current git-root scope.
+- `detect_scope()` -> detect the resolved default scope for the current buffer.
 - `list(scope?)` -> list populated slots for a scope.
+- `slot_for_file(path?, scope?)` -> return the slot currently holding a file.
+- `exists(path?, scope?)` -> check whether a file is already marked.
+- `current_slot(scope?)` -> return the slot currently tracked for cycling.
 - `set(slot, mark?, scope?)` -> save an explicit mark or the current cursor
   location.
 - `clear(slot, scope?)` -> clear a slot.
 - `toggle(slot, scope?)` -> set/clear a slot using the current cursor location.
 - `select(slot, scope?)` -> jump to a saved mark.
 - `cycle_next(scope?)` / `cycle_prev(scope?)` -> move through populated slots.
+- `quickfix(scope?)` -> export the current scope to quickfix in slot order.
+- `clear_all(scope?)` -> clear all populated slots in a scope.
 - `open_list(scope?)` / `toggle_list(scope?)` -> show or toggle the floating
   marks list.
 - `show_scope(scope?)` -> display the active scope and mark count.
 - `toggle_file(scope?)` -> toggle the current file into the lowest free slot, or
   clear its existing slot.
 - `data_path()` -> inspect the resolved persistence file path.
+
+## List window
+
+The floating list stays read-only, but it now supports a few extra actions:
+
+- `<CR>` opens the slot under the cursor.
+- `d` clears the slot under the cursor.
+- `1`-`9` jump directly to visible slots.
+- `<C-s>` opens the selected slot in a horizontal split.
+- `|` opens the selected slot in a vertical split.
+- `<C-q>` exports the current scope to quickfix.
+- `q` or `<Esc>` close the window.
 
 See `:help waystone` for the generated reference docs.
 
