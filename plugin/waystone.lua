@@ -51,6 +51,23 @@ vim.api.nvim_create_user_command("WaystoneScope", function()
   ws().show_scope()
 end, { desc = "Show waystone scope and mark count" })
 
+vim.api.nvim_create_user_command("WaystoneQuickfix", function()
+  local _, err = ws().quickfix()
+  if err then
+    vim.notify("waystone: " .. err, vim.log.levels.WARN)
+  end
+end, { desc = "Populate quickfix with waystone marks" })
+
+vim.api.nvim_create_user_command("WaystoneClearAll", function()
+  local cleared, err = ws().clear_all()
+  if err then
+    vim.notify("waystone: " .. err, vim.log.levels.WARN)
+    return
+  end
+
+  vim.notify(string.format("waystone: cleared %d mark(s)", cleared), vim.log.levels.INFO)
+end, { desc = "Clear all waystone marks in the current scope" })
+
 vim.api.nvim_create_user_command(
   "WaystoneSet",
   make_slot_command("WaystoneSet", "set", vim.log.levels.ERROR),
