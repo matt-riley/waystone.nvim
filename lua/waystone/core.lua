@@ -11,6 +11,7 @@ local state = {
   config = {
     slots = 4,
     data_file = nil,
+    scope_mode = "git",
   },
   active_slot_by_scope = {},
 }
@@ -115,7 +116,7 @@ local function normalize_mark(mark)
   }
 end
 
-local function detect_scope_fallback(bufnr)
+local function detect_git_scope_fallback(bufnr)
   local name = vim.api.nvim_buf_get_name(bufnr)
   local start_dir = name ~= "" and vim.fs.dirname(name) or uv.cwd()
 
@@ -131,7 +132,7 @@ local function detect_scope_fallback(bufnr)
   return vim.fn.fnamemodify(git_dir, ":h")
 end
 
-function M.detect_scope(bufnr)
+local function detect_git_scope(bufnr)
   bufnr = bufnr or 0
 
   if vim.fs and vim.fs.root then
@@ -141,7 +142,39 @@ function M.detect_scope(bufnr)
     end
   end
 
-  return detect_scope_fallback(bufnr)
+  return detect_git_scope_fallback(bufnr)
+end
+
+local function detect_git_branch_scope(bufnr)
+  local root = detect_git_scope(bufnr)
+  if not root then
+    return nil
+  end
+
+  local result = vim.fn.system({ "git", "-C", root, "symbolic-ref", "--short", "HEAD" })
+  local branch = vim.trim(result)
+  if vim.v.shell_error ~= 0 or branch == "" or branch == "HEAD" then
+    return root
+  end
+
+  return string.format("%s:%s", root, branch)
+end
+
+function M.detect_scope(bufnr)
+  bufnr = bufnr or 0
+
+  local mode = state.config.scope_mode or "git"
+  if mode == "cwd" then
+    return uv.cwd()
+  end
+  if mode == "global" then
+    return "global"
+  end
+  if mode == "git_branch" then
+    return detect_git_branch_scope(bufnr)
+  end
+
+  return detect_git_scope(bufnr)
 end
 
 local function get_scope_key(scope)
@@ -223,6 +256,19 @@ local function capture_current_mark()
   }
 end
 
+local function resolve_lookup_path(path)
+  local value = path
+  if not value or value == "" then
+    value = vim.api.nvim_buf_get_name(0)
+  end
+
+  if value == "" then
+    return nil, "current buffer has no file path"
+  end
+
+  return vim.fn.fnamemodify(value, ":p")
+end
+
 function M.configure(config)
   state.config = vim.tbl_extend("force", state.config, config or {})
 end
@@ -249,6 +295,40 @@ function M.list_marks(scope)
   end
 
   return marks
+end
+
+function M.find_slot_by_path(path, scope)
+  local lookup_path, err = resolve_lookup_path(path)
+  if not lookup_path then
+    return nil, err
+  end
+
+  local marks = M.list_marks(scope)
+  for _, entry in ipairs(marks) do
+    if entry.mark.path == lookup_path then
+      return entry.slot
+    end
+  end
+
+  return nil
+end
+
+function M.exists(path, scope)
+  local slot, err = M.find_slot_by_path(path, scope)
+  if err then
+    return nil, err
+  end
+
+  return slot ~= nil
+end
+
+function M.current_slot(scope)
+  local key = get_scope_key(scope)
+  if not key then
+    return nil, "no git root detected for current buffer"
+  end
+
+  return state.active_slot_by_scope[key]
 end
 
 function M.get_slot(slot, scope)
@@ -347,13 +427,17 @@ function M.toggle_slot(slot, scope)
   return saved, "set"
 end
 
-function M.select_slot(slot, scope)
+function M.select_slot(slot, scope, command)
   local mark, err = M.get_slot(slot, scope)
   if err then
     return nil, err
   end
   if not mark then
     return nil, string.format("slot %d is empty", slot)
+  end
+
+  if command then
+    command()
   end
 
   local escaped = vim.fn.fnameescape(mark.path)
@@ -391,6 +475,47 @@ function M.cycle(step, scope)
     slot = next_entry.slot,
     mark = selected,
   }
+end
+
+function M.clear_all(scope)
+  local key, scope_store, err = resolve_scope_store(scope)
+  if not scope_store then
+    return nil, err
+  end
+
+  local cleared = 0
+  for slot = 1, state.config.slots do
+    local slot_name = slot_key(slot)
+    if scope_store[slot_name] then
+      scope_store[slot_name] = nil
+      cleared = cleared + 1
+    end
+  end
+
+  state.active_slot_by_scope[key] = nil
+  save_data()
+  return cleared
+end
+
+function M.quickfix(scope)
+  local marks = M.list_marks(scope)
+  if #marks == 0 then
+    return nil, "no marks set for this scope"
+  end
+
+  local quickfix = {}
+  for _, entry in ipairs(marks) do
+    quickfix[#quickfix + 1] = {
+      filename = entry.mark.path,
+      lnum = entry.mark.row,
+      col = entry.mark.col + 1,
+      text = string.format("[%d] %s", entry.slot, vim.fn.fnamemodify(entry.mark.path, ":~:.")),
+    }
+  end
+
+  vim.fn.setqflist(quickfix, "r")
+  vim.cmd.copen()
+  return #quickfix
 end
 
 function M.toggle_file(scope)

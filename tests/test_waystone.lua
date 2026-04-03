@@ -88,6 +88,17 @@ local function edit_at(path, row, col)
   vim.api.nvim_win_set_cursor(0, { row, col })
 end
 
+local function current_git_branch_scope()
+  local root = vim.fn.getcwd()
+  local result = vim.fn.system({ "git", "-C", root, "symbolic-ref", "--short", "HEAD" })
+  local branch = vim.trim(result)
+  if vim.v.shell_error ~= 0 or branch == "" or branch == "HEAD" then
+    return root
+  end
+
+  return string.format("%s:%s", root, branch)
+end
+
 local setup_set = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -102,8 +113,9 @@ setup_set["setup() initialises with default config"] = function()
 end
 
 setup_set["setup() merges user options"] = function()
-  waystone.setup({ slots = 6 })
+  waystone.setup({ slots = 6, scope_mode = "global" })
   MiniTest.expect.equality(waystone.config.slots, 6)
+  MiniTest.expect.equality(waystone.config.scope_mode, "global")
 end
 
 T["setup"] = setup_set
@@ -147,6 +159,42 @@ end
 core_set["detect_scope prefers git root"] = function()
   local scope = waystone.detect_scope()
   MiniTest.expect.equality(scope, vim.fn.getcwd())
+end
+
+core_set["detect_scope supports cwd and global scope modes"] = function()
+  waystone.setup({ scope_mode = "cwd" })
+  MiniTest.expect.equality(waystone.detect_scope(), vim.fn.getcwd())
+
+  waystone.setup({ scope_mode = "global" })
+  MiniTest.expect.equality(waystone.detect_scope(), "global")
+end
+
+core_set["detect_scope supports git_branch mode"] = function()
+  waystone.setup({ scope_mode = "git_branch" })
+  MiniTest.expect.equality(waystone.detect_scope(), current_git_branch_scope())
+end
+
+core_set["explicit scope overrides configured scope mode"] = function()
+  with_temp_data_file(function()
+    waystone.setup({ scope_mode = "global" })
+    core.reset_for_tests()
+
+    local explicit_scope = vim.fs.joinpath(vim.fn.getcwd(), "tests", "custom-scope")
+    local fixture = vim.fs.joinpath(vim.fn.getcwd(), "tests", "fixture-explicit.lua")
+
+    local saved, err = waystone.set(1, { path = fixture, row = 7, col = 2 }, explicit_scope)
+    MiniTest.expect.no_error(function()
+      assert(saved and not err)
+    end)
+
+    MiniTest.expect.equality(waystone.list(), {})
+    MiniTest.expect.equality(waystone.list(explicit_scope), {
+      {
+        slot = 1,
+        mark = { path = fixture, row = 7, col = 2 },
+      },
+    })
+  end)
 end
 
 core_set["slot validation errors on out-of-range slots"] = function()
@@ -321,6 +369,112 @@ core_set["marks reload from the persisted data file"] = function()
   end)
 end
 
+core_set["slot_for_file() and exists() locate marked files"] = function()
+  with_temp_data_file(function()
+    local scope = vim.fn.getcwd()
+    local fixture = vim.fs.joinpath(scope, "tests", ".tmp-exists.lua")
+
+    with_temp_files({
+      [fixture] = { "return 'exists'" },
+    }, function()
+      waystone.set(2, { path = fixture, row = 5, col = 1 }, scope)
+
+      MiniTest.expect.equality(waystone.slot_for_file(fixture, scope), 2)
+      MiniTest.expect.equality(waystone.exists(fixture, scope), true)
+
+      edit_at(fixture, 1, 0)
+      MiniTest.expect.equality(waystone.slot_for_file(nil, scope), 2)
+      MiniTest.expect.equality(waystone.exists(nil, scope), true)
+    end)
+  end)
+end
+
+core_set["current_slot() tracks active slot and clear_all() resets the scope"] = function()
+  with_temp_data_file(function()
+    local scope = vim.fn.getcwd()
+    local path_a = vim.fs.joinpath(scope, "tests", ".tmp-current-slot-a.lua")
+    local path_b = vim.fs.joinpath(scope, "tests", ".tmp-current-slot-b.lua")
+
+    with_temp_files({
+      [path_a] = { "return 'a'" },
+      [path_b] = { "return 'b'" },
+    }, function()
+      waystone.set(1, { path = path_a, row = 1, col = 0 }, scope)
+      waystone.set(3, { path = path_b, row = 4, col = 2 }, scope)
+
+      MiniTest.expect.equality(waystone.current_slot(scope), 3)
+
+      local cleared, err = waystone.clear_all(scope)
+      MiniTest.expect.no_error(function()
+        assert(cleared == 2 and not err)
+      end)
+
+      MiniTest.expect.equality(waystone.list(scope), {})
+      MiniTest.expect.equality(waystone.current_slot(scope), nil)
+    end)
+  end)
+end
+
+core_set["quickfix() exports marks in slot order"] = function()
+  with_temp_data_file(function()
+    local scope = vim.fn.getcwd()
+    local path_a = vim.fs.joinpath(scope, "tests", ".tmp-quickfix-a.lua")
+    local path_b = vim.fs.joinpath(scope, "tests", ".tmp-quickfix-b.lua")
+
+    with_temp_files({
+      [path_a] = { "return 'a'" },
+      [path_b] = { "return 'b'" },
+    }, function()
+      vim.fn.setqflist({}, "r")
+
+      waystone.set(2, { path = path_b, row = 8, col = 4 }, scope)
+      waystone.set(1, { path = path_a, row = 3, col = 1 }, scope)
+
+      local count, err = waystone.quickfix(scope)
+      MiniTest.expect.no_error(function()
+        assert(count == 2 and not err)
+      end)
+
+      local qflist = vim.fn.getqflist()
+      MiniTest.expect.equality(#qflist, 2)
+      MiniTest.expect.equality(vim.api.nvim_buf_get_name(qflist[1].bufnr), path_a)
+      MiniTest.expect.equality(qflist[1].lnum, 3)
+      MiniTest.expect.equality(qflist[1].col, 2)
+      MiniTest.expect.equality(qflist[1].text, string.format("[1] %s", vim.fn.fnamemodify(path_a, ":~:.")))
+      MiniTest.expect.equality(vim.api.nvim_buf_get_name(qflist[2].bufnr), path_b)
+      MiniTest.expect.equality(qflist[2].lnum, 8)
+      MiniTest.expect.equality(qflist[2].col, 5)
+
+      vim.cmd.cclose()
+    end)
+  end)
+end
+
+core_set["select_slot() supports opening marks in a split"] = function()
+  with_temp_data_file(function()
+    local scope = vim.fn.getcwd()
+    local path = vim.fs.joinpath(scope, "tests", ".tmp-select-split.lua")
+
+    with_temp_files({
+      [path] = { "return 'split'", "return 'split-again'" },
+    }, function()
+      waystone.set(1, { path = path, row = 2, col = 0 }, scope)
+
+      local before = #vim.api.nvim_tabpage_list_wins(0)
+      local selected, err = core.select_slot(1, scope, vim.cmd.split)
+      MiniTest.expect.no_error(function()
+        assert(selected and not err)
+      end)
+
+      MiniTest.expect.equality(#vim.api.nvim_tabpage_list_wins(0), before + 1)
+      MiniTest.expect.equality(vim.api.nvim_buf_get_name(0), path)
+      MiniTest.expect.equality(vim.api.nvim_win_get_cursor(0), { 2, 0 })
+
+      vim.cmd.only()
+    end)
+  end)
+end
+
 T["core"] = core_set
 
 local command_set = MiniTest.new_set({
@@ -407,6 +561,37 @@ command_set["slot command failures preserve notify-level asymmetry"] = function(
       end)
     end)
   end
+end
+
+command_set["WaystoneQuickfix notifies at WARN when the scope has no marks"] = function()
+  with_notify_spy(function(notifications)
+    vim.cmd("WaystoneQuickfix")
+    MiniTest.expect.equality(#notifications, 1)
+    MiniTest.expect.equality(notifications[1].msg, "waystone: no marks set for this scope")
+    MiniTest.expect.equality(notifications[1].level, vim.log.levels.WARN)
+  end)
+end
+
+command_set["WaystoneClearAll notifies cleared mark count"] = function()
+  with_temp_data_file(function()
+    local scope = vim.fn.getcwd()
+    local fixture = vim.fs.joinpath(scope, "tests", ".tmp-clear-all.lua")
+
+    with_temp_files({
+      [fixture] = { "return 'clear-all'" },
+    }, function()
+      waystone.set(1, { path = fixture, row = 1, col = 0 }, scope)
+
+      with_notify_spy(function(notifications)
+        vim.cmd("WaystoneClearAll")
+        MiniTest.expect.equality(#notifications, 1)
+        MiniTest.expect.equality(notifications[1].msg, "waystone: cleared 1 mark(s)")
+        MiniTest.expect.equality(notifications[1].level, vim.log.levels.INFO)
+      end)
+
+      MiniTest.expect.equality(waystone.list(scope), {})
+    end)
+  end)
 end
 
 T["commands"] = command_set

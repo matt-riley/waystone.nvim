@@ -18,6 +18,21 @@ local function close_list()
   list_state.buf = nil
 end
 
+local function select_slot(scope, slot, command)
+  close_list()
+  if slot then
+    core.select_slot(slot, scope, command)
+  end
+end
+
+local function export_quickfix(scope)
+  close_list()
+  local _, err = core.quickfix(scope)
+  if err then
+    vim.notify("waystone: " .. err, vim.log.levels.WARN)
+  end
+end
+
 local function build_lines(marks)
   if #marks == 0 then
     return { "  (no marks set for this scope)" }, {}
@@ -87,10 +102,7 @@ local function open_list(scope)
   map("<CR>", function()
     local lnum = vim.api.nvim_win_get_cursor(win)[1]
     local slot = slots[lnum]
-    close_list()
-    if slot then
-      core.select_slot(slot, scope)
-    end
+    select_slot(scope, slot)
   end)
 
   map("d", function()
@@ -102,6 +114,33 @@ local function open_list(scope)
       open_list(scope)
     end
   end)
+
+  map("<C-s>", function()
+    local lnum = vim.api.nvim_win_get_cursor(win)[1]
+    local slot = slots[lnum]
+    select_slot(scope, slot, vim.cmd.split)
+  end)
+
+  map("|", function()
+    local lnum = vim.api.nvim_win_get_cursor(win)[1]
+    local slot = slots[lnum]
+    select_slot(scope, slot, vim.cmd.vsplit)
+  end)
+
+  map("<C-q>", function()
+    export_quickfix(scope)
+  end)
+
+  for digit = 1, 9 do
+    map(tostring(digit), function()
+      for _, slot in ipairs(slots) do
+        if slot == digit then
+          select_slot(scope, slot)
+          return
+        end
+      end
+    end)
+  end
 
   map("q", close_list)
   map("<Esc>", close_list)
