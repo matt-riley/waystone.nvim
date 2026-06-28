@@ -36,7 +36,7 @@ jobs:
         run: make test
 
   lint:
-    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-lint.yml@0d1d8e7a149a53fcaaca6e128f62e0e3d8fdf293 # main
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-lint.yml@bcaf4ae43edf7d26421741424b82c842c83e55ce # main
 
   format:
-    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-format.yml@0d1d8e7a149a53fcaaca6e128f62e0e3d8fdf293 # main
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-format.yml@bcaf4ae43edf7d26421741424b82c842c83e55ce # main
