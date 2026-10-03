@@ -36,7 +36,17 @@ jobs:
         run: make test
 
   lint:
-    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-lint.yml@cc060a6749be6869154f21c6b3463a1ca218e2e3 # main
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}:${{ github.ref }}:lint
+      cancel-in-progress: true
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-lint.yml@cb986078a5bd4775e5fb05348f3618e41fedf4de # v4
 
   format:
-    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-format.yml@cc060a6749be6869154f21c6b3463a1ca218e2e3 # main
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}:${{ github.ref }}:format
+      cancel-in-progress: true
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-format.yml@cb986078a5bd4775e5fb05348f3618e41fedf4de # v4
