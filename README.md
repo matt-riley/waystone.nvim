@@ -3,9 +3,7 @@
 > Navigate your Neovim project like a fantasy hero — drop waystones to mark
 > locations and jump between them instantly.
 
-<!-- Uncomment badges after pushing to GitHub:
-[![CI](https://github.com/mattriley/waystone.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/mattriley/waystone.nvim/actions/workflows/ci.yml)
--->
+[![CI](https://github.com/matt-riley/waystone.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/matt-riley/waystone.nvim/actions/workflows/ci.yml)
 
 ## Features
 
@@ -29,10 +27,10 @@
 
 ```lua
 -- lazy.nvim
-{ "mattriley/waystone.nvim", opts = {} }
+{ "matt-riley/waystone.nvim", opts = {} }
 
 -- packer.nvim
-use { "mattriley/waystone.nvim", config = function() require("waystone").setup() end }
+use { "matt-riley/waystone.nvim", config = function() require("waystone").setup() end }
 ```
 
 ## Usage
