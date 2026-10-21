@@ -73,13 +73,9 @@ local function open_list(scope)
     height = height,
     style = "minimal",
     border = "rounded",
+    title = " Waystone Marks ",
+    title_pos = "center",
   }
-
-  -- title support added in Neovim 0.9
-  if vim.fn.has("nvim-0.9") == 1 then
-    win_config.title = " Waystone Marks "
-    win_config.title_pos = "center"
-  end
 
   local win = vim.api.nvim_open_win(buf, true, win_config)
   list_state.win = win

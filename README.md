@@ -3,7 +3,7 @@
 > Navigate your Neovim project like a fantasy hero — drop waystones to mark
 > locations and jump between them instantly.
 
-[![CI](https://github.com/matt-riley/waystone.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/matt-riley/waystone.nvim/actions/workflows/ci.yml)
+[![Tests](https://github.com/matt-riley/waystone.nvim/actions/workflows/tests.yml/badge.svg)](https://github.com/matt-riley/waystone.nvim/actions/workflows/tests.yml)
 
 ## Features
 
@@ -16,7 +16,7 @@
 
 ## Requirements
 
-- Neovim 0.8+
+- Neovim nightly
 
 ## Versioning
 

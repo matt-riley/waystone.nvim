@@ -1,0 +1,14 @@
+name: Format
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  format:
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}:${{ github.ref }}:format
+      cancel-in-progress: true
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-format.yml@cb986078a5bd4775e5fb05348f3618e41fedf4de # v4
