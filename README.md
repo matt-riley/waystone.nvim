@@ -16,7 +16,7 @@
 
 ## Requirements
 
-- Neovim 0.8+
+- Neovim nightly
 
 ## Versioning
 
