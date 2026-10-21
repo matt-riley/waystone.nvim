@@ -1,0 +1,14 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}:${{ github.ref }}:tests
+      cancel-in-progress: true
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-tests.yml@cb986078a5bd4775e5fb05348f3618e41fedf4de # v4
