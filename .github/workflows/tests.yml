@@ -11,4 +11,4 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}:${{ github.ref }}:tests
       cancel-in-progress: true
-    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-tests.yml@cb986078a5bd4775e5fb05348f3618e41fedf4de # v4
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-tests.yml@2761920a2537112201681132b79d2e48fd41c36b # v4
