@@ -3,9 +3,6 @@ waystone.nvim
 
 Version: 0.1.3
 
-
-
-
 Slot-based project marks for Neovim.
 
 Marks are persisted in JSON and grouped by a resolved scope key. The default
