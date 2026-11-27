@@ -18,7 +18,7 @@ jobs:
   docs:
     permissions:
       contents: write
-    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-docs.yml@f846763f763247cb0140e3dd08002280b001f6cf # v4.2.0
+    uses: matt-riley/matt-riley-ci/.github/workflows/nvim-docs.yml@e8a2503259d33b925cad2bc018e052a2579f441d # v4.2.0
     with:
       commit-message: "chore(docs): regenerate vim help"
 
